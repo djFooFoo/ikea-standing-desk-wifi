@@ -1,4 +1,5 @@
 import struct
+from typing import List
 
 import fastapi
 from bleak import BleakScanner, BleakClient
