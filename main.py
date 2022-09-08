@@ -14,13 +14,13 @@ MAX_HEIGHT_DESK = 1270
 
 
 async def list_devices():
-    devices: List[BLEDevice] = await BleakScanner.discover(timeout=10.0)
+    devices: List[BLEDevice] = await BleakScanner.discover()
     return devices
 
 
 async def get_desk():
     devices = await list_devices()
-    desk_devices = (device for device in devices if device.name and 'Desk 6540' == str(device.name))
+    desk_devices = (device for device in devices if device.name and 'Desk' in device.name)
     desk = next(desk_devices, None)
     return desk
 
@@ -56,7 +56,7 @@ async def move_to_desired_height(client, desired_height_in_mm: int):
         if abs(difference_in_mm) < 10:
             print('COMMAND -> desk stop moving')
             await stop(client)
-            break
+            return current_height_in_mm
 
         if difference_in_mm >= 0:
             print('COMMAND -> desk move up')
@@ -70,14 +70,19 @@ async def move_desk_to_height(height_in_mm: int):
     desk = await get_desk()
     if desk is None:
         raise "No desk found nearby!"
+    else:
+        print(f"{desk.name} was found!")
 
     print(f"Connecting to bluetooth device on MAC address `{desk.address}`")
+
     async with BleakClient(address_or_ble_device=desk) as client:
         print(f'Connected `{client.is_connected}`')
         device_name_byte_array = await client.read_gatt_char(UUID_DEVICE_NAME)
         connected_device_name = bytes(device_name_byte_array).decode("utf-8")
         print(f'This Python script is connected with the following device `{connected_device_name}`')
-        return await move_to_desired_height(client, height_in_mm)
+        height_reached_in_mm = await move_to_desired_height(client, height_in_mm)
+
+    return height_reached_in_mm
 
 
 app = fastapi.FastAPI()
@@ -86,12 +91,12 @@ app = fastapi.FastAPI()
 @app.get("/sit")
 async def sit():
     height = 850
-    await move_desk_to_height(height)
-    return f"Device has reached height of {int(height / 10)} cm"
+    height_reached = await move_desk_to_height(height)
+    return f"Device has reached height of {int(height_reached / 10)} cm"
 
 
 @app.get("/stand")
 async def stand():
     height = 1200
-    await move_desk_to_height(height)
-    return f"Device has reached height of {int(height / 10)} cm"
+    height_reached = await move_desk_to_height(height)
+    return f"Device has reached height of {int(height_reached / 10)} cm"
